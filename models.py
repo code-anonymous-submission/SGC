@@ -9,13 +9,19 @@ class SGC(nn.Module):
     A Simple PyTorch Implementation of Logistic Regression.
     Assuming the features have been preprocessed with k-step graph propagation.
     """
-    def __init__(self, nfeat, nclass):
+    def __init__(self, nfeat, nclass, dropout, use_relu):
         super(SGC, self).__init__()
 
-        self.W = nn.Linear(nfeat, nclass)
+        self.W = nn.Linear(nfeat, nclass)            
+        self.dropout = dropout # added dropout
+        self.use_relu = use_relu
 
     def forward(self, x):
-        return self.W(x)
+        x = self.W(x)
+        if self.use_relu:
+            x = F.relu(x) # added reLU
+        x = F.dropout(x, self.dropout, training=self.training)
+        return x
 
 class GraphConvolution(Module):
     """
@@ -36,6 +42,7 @@ class GraphConvolution(Module):
     def forward(self, input, adj):
         support = self.W(input)
         output = torch.spmm(adj, support)
+        return output # This was missing in SGC code
 
 class GCN(nn.Module):
     """
@@ -48,15 +55,16 @@ class GCN(nn.Module):
         self.gc2 = GraphConvolution(nhid, nclass)
         self.dropout = dropout
 
-    def forward(self, x, adj, use_relu=True):
+    def forward(self, x, adj):
         x = self.gc1(x, adj)
-        if use_relu:
-            x = F.relu(x)
+        #print("X", x)
+        
+        x = F.relu(x)
         x = F.dropout(x, self.dropout, training=self.training)
         x = self.gc2(x, adj)
         return x
 
-def get_model(model_opt, nfeat, nclass, nhid=0, dropout=0, cuda=True):
+def get_model(model_opt, nfeat, nclass, nhid, dropout, cuda, use_relu):
     if model_opt == "GCN":
         model = GCN(nfeat=nfeat,
                     nhid=nhid,
@@ -64,7 +72,7 @@ def get_model(model_opt, nfeat, nclass, nhid=0, dropout=0, cuda=True):
                     dropout=dropout)
     elif model_opt == "SGC":
         model = SGC(nfeat=nfeat,
-                    nclass=nclass)
+                    nclass=nclass, dropout=dropout, use_relu=use_relu) # added dropout
     else:
         raise NotImplementedError('model:{} is not implemented!'.format(model_opt))
 
